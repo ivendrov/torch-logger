@@ -9,7 +9,7 @@ source = {
 description = {
     summary = "Logging and visualization for Torch model training",
     detailed = [[]],
-    homepage = "...",
+    homepage = "https://github.com/ivendrov/torch-logger",
     license = "MIT"
 }
 
