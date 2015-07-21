@@ -1,13 +1,3 @@
-
-
-// globals
-var db = {};
-var datasets_index = [];
-var current_methods_dict = [];
-var dataset_select = [];
-var display_select = [];
-
-
 function init() {
     console.log("Loading page");
 
