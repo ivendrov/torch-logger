@@ -42,7 +42,9 @@ function Log:__init(name, hyperparams, saveDir, xLabel, saveFrequency)
 
     local models = {}
     for f in paths.files(saveDir, '.json') do
-        table.insert(models, f:sub(1, -6))
+        if f ~= "index.json" then
+            table.insert(models, f:sub(1, -6))
+        end
     end
     write_json(indexLoc, models)
 end
