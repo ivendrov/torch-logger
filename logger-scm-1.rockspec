@@ -2,7 +2,7 @@ package = "logger"
 version = "scm-1"
 
 source = {
-    url = "git@github.com:ivendrov/torch-logger.git"
+    url = "git@github.com:ivendrov/torch-logger.git",
     branch = 'master'
 }
 
