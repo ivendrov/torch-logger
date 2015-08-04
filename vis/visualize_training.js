@@ -187,7 +187,7 @@ function displayModels(models){
             .range([0, w]));
 
         var yScale = d3.scale.log();
-        if (y_minima[i] <= 0){
+        if (y_minima[i] <= 0 || y_maxima[i] / y_minima[i] < 10 ){
             yScale = d3.scale.linear();
         }
         yScales.push(yScale
@@ -219,7 +219,6 @@ function displayModels(models){
             .y(function (d) {
                 return yScales[datastream](d.y)
             })
-            .interpolate("basis");
     }
 
     // Populate the doubly-nested selection of curves
