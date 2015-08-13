@@ -36,7 +36,7 @@ function init() {
                     console.log("Selected model " + option.value)
                 }
             }
-            loadModels(queryDict["model"], displayModels);
+            loadModels(queryDict["model"]);
         }
 
     });
@@ -62,104 +62,93 @@ function update_select(formSelector, options){
         });
 }
 
+// two global variables storing all loaded models and their colors
+models = [];
+colors = [];
 /**
  * Loads the given models into memory
  * @param modelnames model names
  * @param callback function to call with resulting array of json logs
  */
 function loadModels(modelnames, callback){
-    var models = [];
+    models = [];
 
     modelnames.forEach(function(modelname){
         d3.json('static/' + modelname + '.json', function(data){
             models.push(data);
             if (models.length == modelnames.length)
-                callback(models)
+                displayModels()
         });
     });
 }
 
 
 
-
-
-/**
- *
- * @param models array of logs for each model
- */
-function displayModels(models){
-    console.log("Displaying ");
-
-
-    // generate random colors for each method
-    var colors = [];
-    for (var i = 0; i < models.length; i++){
-        colors.push(d3.rgb('#'+Math.random().toString(16).substr(-6)).darker(1));
+function displayData(e) {
+    var dataSelect = e.srcElement;
+    var data_streams = [];
+    var options = dataSelect.options;
+    for (var i = 0; i < options.length; i++){
+        if (options[i].selected){
+            console.log(options[i].value);
+            data_streams.push(options[i].value)
+        }
     }
 
-    // display hyperparams
-    d3.select("#hyperparams").selectAll("div").remove();
-    var hyperDivs = d3.select("#hyperparams").selectAll("div")
-        .data(models)
-        .enter()
-        .append("div")
-        .style("color", function(d, i){
-            return colors[i];
-        });
-    hyperDivs
-        .append("h2")
-        .append("b")
-        .text(function(d){
-            return d.name;
-        });
-    hyperDivs
-        .append("pre")
-        .text(function(d){
-            return JSON.stringify(d.hyperparams, null, 2);
-        });
-
-
-    // get a list of all the data streams
-    var data_streams = [];
-    models.forEach(function(model){
-        for (var data in model.data){
-            if (data_streams.indexOf(data) < 0){
-                data_streams.push(data);
-            }
+    // a chart is an array of data streams (usually just one)
+    // display the Training analogue of each data stream, if it exists
+    var charts = [];
+    data_streams.forEach(function(dataName){
+        if (_.every(models, function(model) { return model.data.hasOwnProperty("Training" + dataName)})){
+            charts.push([dataName, "Training" + dataName]);
+        } else {
+            charts.push([dataName]);
         }
     });
 
-    // get minimal and maximal values for each data stream
+    // get minimal and maximal values for each chart
     var x_maximum = Number.NEGATIVE_INFINITY;
-    var y_minima = new Array(data_streams.length);
-    var y_maxima = new Array(data_streams.length);
-    for (var i = 0; i < data_streams.length; i++){
+    var y_minima = new Array(charts.length);
+    var y_maxima = new Array(charts.length);
+    for (var i = 0; i < charts.length; i++){
         y_minima[i] = Number.POSITIVE_INFINITY;
         y_maxima[i] = Number.NEGATIVE_INFINITY;
-        var data_stream = data_streams[i];
-        for (var j = 0; j < models.length; j++){
-            if (models[j].data.hasOwnProperty(data_stream)){
-                models[j].data[data_stream].forEach(function(p){
-                    x_maximum = Math.max(x_maximum, p.x);
-                    y_maxima[i] = Math.max(y_maxima[i], p.y);
-                    y_minima[i] = Math.min(y_minima[i], p.y);
-                });
+        charts[i].forEach(function(data_stream) {
+            for (var j = 0; j < models.length; j++) {
+                if (models[j].data.hasOwnProperty(data_stream)) {
+                    models[j].data[data_stream].forEach(function (p) {
+                        x_maximum = Math.max(x_maximum, p.x);
+                        y_maxima[i] = Math.max(y_maxima[i], p.y);
+                        y_minima[i] = Math.min(y_minima[i], p.y);
+                    });
+                }
             }
-        }
+        });
     }
+
+
+
 
 
     var charts_main = d3.select("#charts");
 
+    charts_main.selectAll("div").remove();
+
     // add new charts if need be
     var new_divs = charts_main.selectAll("div")
-        .data(data_streams)
+        .data(charts)
         .enter()
         .append("div");
     // add headers to new charts
     new_divs
         .append("h1")
-        .text(function(d){ return d; });
+        .text(function(d) {
+            if (d.length == 1) {
+                return d[0]
+            } else {
+                return d[0] + " (dashed = Training)"
+            }
+        });
 
     // add svgs to new charts
 
@@ -197,37 +186,50 @@ function displayModels(models){
 
 
     // Add all needed curves to all charts
-    d3.selectAll(".chart")
-        .selectAll(".curve")
-        .data(models)
-        .enter()
-        .append("path")
-        .attr("class", "curve")
-        .style("stroke", function(d, i) {
-            return colors[i]
-        });
+    var datastreams =
+        d3.selectAll(".chart")
+            .selectAll(".datastream") // all datastreams for this chart
+            .data(function(d) { return d;})
+            .enter()
+            .append("g")
+            .attr("class", "datastream");
+
+    // make training info dashed
+    datastreams
+        .filter(function (d,i) { return i == 1})
+        .style("stroke-dasharray", ("3, 3"))
+        .style("opacity", 0.5);
+
+
+    datastreams
+        .selectAll(".curve") // all curves for this datastream
+            .data(function (d) { return models.map(function (model) {return model.data[d];}); })
+            .enter()
+            .append("path")
+            .attr("class", "curve")
+            .style("stroke", function(d, i, datastream_index) {
+                return colors[i]
+            });
 
     /**
-     * @param datastream index of appropriate data stream
+     * @param chart_index index of chart
      * @returns a function which, given an array of points, returns the SVG path string, adjusted to the chart's scale
      */
-    function path_string(datastream) {
+    function path_string(chart_index) {
         return d3.svg.line()
             .x(function (d) {
-                return xScales[datastream](d.x)
+                return xScales[chart_index](d.x)
             })
             .y(function (d) {
-                return yScales[datastream](d.y)
+                return yScales[chart_index](d.y)
             })
     }
 
     // Populate the doubly-nested selection of curves
     var curves = d3.selectAll(".chart").selectAll(".curve");
     curves
-        .attr("d", function(d, model_index, data_index){
-            console.log(data_index);
-            console.log(model_index);
-            return path_string(data_index)(d.data[data_streams[data_index]]);
+        .attr("d", function(d, model_index, chart_index){
+            return path_string(chart_index)(d);
         });
 
     // x label
@@ -246,7 +248,7 @@ function displayModels(models){
         .attr("y", -60)
         .attr("dy", ".75em")
         .attr("transform", "rotate(-90)")
-        .text(function(d) { return d; });
+        .text(function(d) { return d[0]; });
 
 
 
@@ -275,5 +277,64 @@ function displayModels(models){
                 .ticks(10)
              (d3.select(this));
         });
-    
+}
+
+
+/**
+ * Randomly assigns colors to models, outputs hyperparameters, and a list of possible data sources
+ */
+function displayModels(){
+    console.log("Displaying ");
+
+
+    // generate random colors for each method
+    colors = [];
+    for (var i = 0; i < models.length; i++){
+        colors.push(d3.rgb('#'+Math.random().toString(16).substr(-6)).darker(1));
+    }
+
+    // display hyperparams
+    d3.select("#hyperparams").selectAll("div").remove();
+    var hyperDivs = d3.select("#hyperparams").selectAll("div")
+        .data(models)
+        .enter()
+        .append("div")
+        .style("color", function(d, i){
+            return colors[i];
+        });
+    hyperDivs
+        .append("h2")
+        .append("b")
+        .text(function(d){
+            return d.name;
+        });
+    hyperDivs
+        .append("pre")
+        .text(function(d){
+            return JSON.stringify(d.hyperparams, null, 2);
+        });
+
+
+    // populate data selector
+
+
+
+    function stripTraining(str){
+        if (str.startsWith("Training"))
+            return str.substring("Training".length);
+        else
+            return str;
+    }
+
+    var all_data_names = models.map(function(model){
+        return _.uniq(_.keys(model.data).map(stripTraining).sort(), true);
+    });
+    var data_names = _.intersection.apply(null, all_data_names);
+
+    var data_selector = d3.select("#data_select").select("[name=data]").node();
+    data_selector.options.length = 0;
+    data_names.forEach(function(dataName,i){
+        data_selector.options[i] = new Option(dataName, dataName);
+    })
+    data_selector.addEventListener("change", displayData, false)
 }
